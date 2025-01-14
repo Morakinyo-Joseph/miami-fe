@@ -1,3 +1,58 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* 
+@tailwind base;
+@tailwind components;
+@tailwind utilities; */
+
+/* Custom styles for the focus slider */
+input[type="range"].focus-slider {
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Thumb styles */
+input[type="range"].focus-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 3px;
+  background: white;
+  border-radius: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+input[type="range"].focus-slider::-webkit-slider-thumb:hover {
+  transform: scaleX(1.2);
+}
+
+/* Track styles */
+input[type="range"].focus-slider::-webkit-slider-runnable-track {
+  width: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+/* Firefox styles */
+input[type="range"].focus-slider::-moz-range-thumb {
+  width: 12px;
+  height: 3px;
+  background: white;
+  border: none;
+  border-radius: 1px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: all 0.15s ease;
+}
+
+input[type="range"].focus-slider::-moz-range-thumb:hover {
+  transform: scaleX(1.2);
+}
+
+input[type="range"].focus-slider::-moz-range-track {
+  width: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
