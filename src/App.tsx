@@ -456,14 +456,11 @@
 
 
 
-
-
-
 import React, { useState, useEffect } from 'react';
 import { Camera } from './components/Camera2';
-import { Camera as CameraIcon, ArrowLeft, Hand, ChevronDown, RefreshCw } from 'lucide-react';
+import { Camera as CameraIcon, ArrowLeft, Hand, ChevronDown } from 'lucide-react';
 import { FingerType, UploadResponse, FingerprintDetail } from './types';
-import { uploadFingerprint, getFingerprintDetails } from './services/api';
+import { uploadFingerprint, getFingerprintDetails, deleteClient } from './services/api';
 import { Header } from './components/Header';
 import { ProgressBar } from './components/ProgressBar';
 import { ClientRegistration } from './components/ClientRegistration';
@@ -473,14 +470,10 @@ function App() {
   const [selectedFinger, setSelectedFinger] = useState<FingerType>('index');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showProgress, setShowProgress] = useState(false);
   const [processedFingerprint, setProcessedFingerprint] = useState<FingerprintDetail | null>(null);
   const [isFingerSelectorOpen, setIsFingerSelectorOpen] = useState(false);
-  const [isLoadingFingerprint, setIsLoadingFingerprint] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const MAX_RETRIES = 5;
-  const RETRY_DELAY = 2000;
 
   const fingers: FingerType[] = ['thumb', 'index', 'middle', 'ring', 'pinky'];
   const fingerIcons: Record<FingerType, string> = {
@@ -488,37 +481,8 @@ function App() {
     index: '☝️',
     middle: '🖕',
     ring: '💍',
-    pinky: '🤙'
+    pinky: '🤙',
   };
-
-  const fetchFingerprintDetails = async (cId: number, fId: number) => {
-    setIsLoadingFingerprint(true);
-    try {
-      const details = await getFingerprintDetails(cId, fId);
-      const fingerprint = details.data[0];
-      
-      // If fingerprint image is not available, retry
-      if (!fingerprint.fingerprint && retryCount < MAX_RETRIES) {
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-        }, RETRY_DELAY);
-      } else {
-        setProcessedFingerprint(fingerprint);
-        setRetryCount(0);
-      }
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to fetch processed fingerprint.' });
-    } finally {
-      setIsLoadingFingerprint(false);
-    }
-  };
-
-  // Effect for auto-retry
-  useEffect(() => {
-    if (processedFingerprint?.client_id && processedFingerprint?.finger_id && retryCount > 0) {
-      fetchFingerprintDetails(processedFingerprint.client_id, processedFingerprint.finger_id);
-    }
-  }, [retryCount]);
 
   const handleCapture = async (imageData: string) => {
     setCapturedImage(imageData);
@@ -535,15 +499,23 @@ function App() {
       const response = await uploadFingerprint({
         client_id: clientId,
         finger_type: selectedFinger,
-        finger_image: capturedImage
+        finger_image: capturedImage,
       });
 
       setMessage({ type: 'success', text: response.message });
       setCapturedImage(null);
       setShowProgress(true);
 
-      setTimeout(() => {
-        fetchFingerprintDetails(response.data.client_id, response.data.finger_id);
+      setTimeout(async () => {
+        try {
+          const details = await getFingerprintDetails(
+            response.data.client_id,
+            response.data.finger_id
+          );
+          setProcessedFingerprint(details.data[0]);
+        } catch (error) {
+          setMessage({ type: 'error', text: 'Failed to fetch processed fingerprint.' });
+        }
       }, 10000);
     } catch (error) {
       setMessage({ type: 'error', text: 'Failed to upload fingerprint. Please try again.' });
@@ -552,30 +524,33 @@ function App() {
     }
   };
 
-  const handleManualRefresh = () => {
-    if (processedFingerprint) {
-      fetchFingerprintDetails(processedFingerprint.client_id, processedFingerprint.finger_id);
-    }
-  };
-
-  const handleProgressComplete = () => {
-    setShowProgress(false);
-    setMessage(null);
-  };
-
-  const handleNewClient = () => {
-    setClientId(null);
-    setProcessedFingerprint(null);
-    setCapturedImage(null);
-    setMessage(null);
-    setShowProgress(false);
-    setRetryCount(0);
-  };
-
   const handleFingerSelect = (finger: FingerType) => {
     setSelectedFinger(finger);
     setIsFingerSelectorOpen(false);
   };
+
+  useEffect(() => {
+    let deleteTimeout: NodeJS.Timeout | null = null;
+
+    if (processedFingerprint && clientId) {
+      deleteTimeout = setTimeout(async () => {
+        try {
+          await deleteClient(clientId);
+          setMessage({ type: 'success', text: 'Client data deleted successfully.' });
+          setClientId(null);
+          setProcessedFingerprint(null);
+          setCapturedImage(null);
+          setShowProgress(false);
+        } catch (error) {
+          setMessage({ type: 'error', text: 'Failed to delete client data.' });
+        }
+      }, 15000);
+    }
+
+    return () => {
+      if (deleteTimeout) clearTimeout(deleteTimeout);
+    };
+  }, [processedFingerprint, clientId]);
 
   if (!clientId) {
     return (
@@ -592,7 +567,13 @@ function App() {
         <div className="flex items-center justify-between mb-8">
           <Header />
           <button
-            onClick={handleNewClient}
+            onClick={() => {
+              setClientId(null);
+              setProcessedFingerprint(null);
+              setCapturedImage(null);
+              setMessage(null);
+              setShowProgress(false);
+            }}
             className="flex items-center gap-2 text-black-500 hover:text-blue-600 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -616,9 +597,13 @@ function App() {
                     <span className="text-xl">{fingerIcons[selectedFinger]}</span>
                     <span className="capitalize">{selectedFinger} Finger</span>
                   </span>
-                  <ChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isFingerSelectorOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    className={`w-5 h-5 text-gray-500 transition-transform ${
+                      isFingerSelectorOpen ? 'rotate-180' : ''
+                    }`}
+                  />
                 </button>
-                
+
                 {isFingerSelectorOpen && (
                   <div className="absolute z-10 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200 py-1">
                     {fingers.map((finger) => (
@@ -678,46 +663,35 @@ function App() {
         ) : (
           <div className="bg-white rounded-lg shadow-lg p-6">
             <h2 className="text-xl font-semibold mb-4 text-center">Processed Fingerprint</h2>
-            <div className="relative">
-              {processedFingerprint.fingerprint ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Original Image</h3>
+                <img
+                  src={`data:image/jpeg;base64,${processedFingerprint.finger_image}`}
+                  alt="Original fingerprint"
+                  className="w-full rounded-lg shadow-md"
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-medium mb-2">Processed Image</h3>
                 <img
                   src={`data:image/jpeg;base64,${processedFingerprint.fingerprint}`}
                   alt="Processed fingerprint"
                   className="w-full rounded-lg shadow-md"
                 />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500 mb-4">Processing fingerprint...</p>
-                  {isLoadingFingerprint ? (
-                    <RefreshCw className="w-6 h-6 text-blue-500 animate-spin" />
-                  ) : (
-                    <button
-                      onClick={handleManualRefresh}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      Refresh
-                    </button>
-                  )}
-                </div>
-              )}
+              </div>
             </div>
             <div className="mt-4 text-center">
               <p className="text-sm text-gray-600">
                 Captured on: {new Date(processedFingerprint.created_at).toLocaleString()}
               </p>
-              <button
-                onClick={() => setProcessedFingerprint(null)}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Capture New Fingerprint
-              </button>
+              <p className="text-sm text-red-600">Client will be deleted in 15 seconds...</p>
             </div>
           </div>
         )}
 
         {message && (
-          <div className="relative">
+          <div className="relative mt-4">
             <div
               className={`p-4 rounded-lg ${
                 message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
@@ -726,7 +700,7 @@ function App() {
               {message.text}
             </div>
             {showProgress && message.type === 'success' && (
-              <ProgressBar duration={10000} onComplete={handleProgressComplete} />
+              <ProgressBar duration={10000} onComplete={() => setShowProgress(false)} />
             )}
           </div>
         )}
