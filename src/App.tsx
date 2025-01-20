@@ -213,7 +213,7 @@
 
 
 import React, { useState } from 'react';
-import { Camera } from './components/Camera';
+import { Camera } from './components/Camera2';
 import { Camera as CameraIcon, ArrowLeft, Hand, ChevronDown } from 'lucide-react';
 import { FingerType, UploadResponse, FingerprintDetail } from './types';
 import { uploadFingerprint, getFingerprintDetails } from './services/api';
