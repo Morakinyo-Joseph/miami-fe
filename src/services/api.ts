@@ -83,7 +83,7 @@ import { API_CONFIG } from '../config';
 
 export async function createClient(data: ClientRequest): Promise<ClientResponse> {
   try {
-    const response = await fetch(`${API_CONFIG.baseUrl}/fingerprint/register-client`, {
+    const response = await fetch(`${API_CONFIG.baseUrl}/fingerprint/register/client`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
